@@ -10,6 +10,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "dxc/DXIL/DxilUtil.h"
+#include "dxc/DXIL/DxilConstants.h"
 #include "dxc/DXIL/DxilInstructions.h"
 #include "dxc/DXIL/DxilModule.h"
 #include "dxc/DXIL/DxilOperations.h"
@@ -18,9 +19,11 @@
 #include "dxc/Support/Global.h"
 
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -578,7 +581,7 @@ bool IsHLSLObjectType(llvm::Type *Ty) {
     if (IsHLSLHitObjectType(Ty))
       return true;
 
-    if (IsHLSLMatrixRefType(Ty))
+    if (IsHLSLLinAlgMatrixType(Ty))
       return true;
   }
   return false;
@@ -615,22 +618,22 @@ bool IsHLSLHitObjectType(llvm::Type *Ty) {
   return ST->getName() == "dx.types.HitObject";
 }
 
-llvm::Type *GetHLSLMatrixRefType(llvm::Module *M) {
-  using namespace llvm;
-  StructType *MatrixRefTy = M->getTypeByName("dx.types.MatrixRef");
-  if (!MatrixRefTy)
-    MatrixRefTy = StructType::create({Type::getInt8PtrTy(M->getContext(), 0)},
-                                     "dx.types.MatrixRef", false);
-  return MatrixRefTy;
-}
-
-bool IsHLSLMatrixRefType(llvm::Type *Ty) {
+bool IsHLSLLinAlgMatrixType(llvm::Type *Ty) {
   llvm::StructType *ST = dyn_cast<llvm::StructType>(Ty);
   if (!ST)
     return false;
   if (!ST->hasName())
     return false;
-  return ST->getName() == "dx.types.MatrixRef";
+  return ST->getName().startswith(DXIL::kDxLinAlgMatrixTypePrefix);
+}
+
+StringRef GetHLSLLinAlgMatrixTypeMangling(llvm::StructType *Ty) {
+  return Ty->getStructName().substr(strlen(DXIL::kDxLinAlgMatrixTypePrefix));
+}
+
+bool IsHLSLKnownTargetType(llvm::Type *Ty) {
+  // Currently only LinAlgMatrix types are target types.
+  return IsHLSLLinAlgMatrixType(Ty);
 }
 
 bool IsHLSLResourceDescType(llvm::Type *Ty) {

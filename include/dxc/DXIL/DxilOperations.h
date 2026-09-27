@@ -84,7 +84,6 @@ public:
   llvm::LLVMContext &GetCtx() { return m_Ctx; }
   llvm::Module *GetModule() { return m_pModule; }
   llvm::Type *GetHandleType() const;
-  llvm::Type *GetMatrixRefType() const;
   llvm::Type *GetHitObjectType() const;
   llvm::Type *GetNodeHandleType() const;
   llvm::Type *GetNodeRecordHandleType() const;
@@ -146,6 +145,7 @@ public:
   static bool CheckOpCodeTable();
   static bool IsDxilOpFuncName(llvm::StringRef name);
   static bool IsDxilOpFunc(const llvm::Function *F);
+  static bool IsDxilOpLinAlgFuncName(llvm::StringRef Name);
   static bool IsDxilOpFuncCallInst(const llvm::Instruction *I);
   static bool IsDxilOpFuncCallInst(const llvm::Instruction *I, OpCode opcode);
   static bool IsDxilOpWave(OpCode C);
@@ -191,7 +191,6 @@ private:
   llvm::Type *m_pSplitDoubleType;
   llvm::Type *m_pFourI32Type;
   llvm::Type *m_pFourI16Type;
-  llvm::Type *m_pMatrixRefType;
 
   DXIL::LowPrecisionMode m_LowPrecisionMode;
 
@@ -288,6 +287,7 @@ private:
   static const char *m_NamePrefix;
   static const char *m_TypePrefix;
   static const char *m_MatrixTypePrefix;
+  static const char *m_LinAlgNamePrefix;
   static unsigned GetTypeSlot(llvm::Type *pType);
   static const char *GetOverloadTypeName(unsigned TypeSlot);
   static llvm::StringRef GetTypeName(llvm::Type *Ty,

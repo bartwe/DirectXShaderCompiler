@@ -885,8 +885,8 @@ TEST_F(ValidationTest, CsThreadSizeFail) {
           "Declared Thread Group Z size 1025 outside valid range",
           "Declared Thread Group Count 1076890625 (X*Y*Z) is beyond the valid "
           "maximum",
-          "Total Thread Group Shared Memory storage is 256000000, exceeded "
-          "32768",
+          "Total Thread Group Shared Memory used by 'main' is 256000000, "
+          "exceeding maximum: 32768",
       });
 }
 TEST_F(ValidationTest, DeadLoopFail) {
@@ -4882,9 +4882,19 @@ TEST_F(ValidationTest, CacheInitWithLowPrec) {
   TestCheck(L"..\\DXILValidation\\val-dx-type-lowprec.ll");
 }
 
+// PSVRuntimeInfo4 adds NumBytesGroupSharedMemory and is only emitted for
+// validator version >= 1.10; earlier validators emit PSVRuntimeInfo3.
+static uint32_t GetExpectedPSVRuntimeInfoSize(const VersionSupportInfo &ver) {
+  bool HasV4 =
+      ver.m_ValMajor > 1 || (ver.m_ValMajor == 1 && ver.m_ValMinor >= 10);
+  return HasV4 ? static_cast<uint32_t>(sizeof(PSVRuntimeInfo4))
+               : static_cast<uint32_t>(sizeof(PSVRuntimeInfo3));
+}
+
 TEST_F(ValidationTest, PSVStringTableReorder) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileSource("float4 main(float a:A, float b:B) : SV_Target { return 1; }",
@@ -4915,7 +4925,7 @@ TEST_F(ValidationTest, PSVStringTableReorder) {
   const uint32_t *PSVPtr = (const uint32_t *)GetDxilPartData(pPSVPart);
 
   uint32_t PSVRuntimeInfo_size = *(PSVPtr++);
-  VERIFY_ARE_EQUAL(sizeof(PSVRuntimeInfo4), PSVRuntimeInfo_size);
+  VERIFY_ARE_EQUAL(GetExpectedPSVRuntimeInfoSize(m_ver), PSVRuntimeInfo_size);
   PSVRuntimeInfo4 *PSVInfo =
       const_cast<PSVRuntimeInfo4 *>((const PSVRuntimeInfo4 *)PSVPtr);
   VERIFY_ARE_EQUAL(2u, PSVInfo->SigInputElements);
@@ -5075,8 +5085,9 @@ public:
 };
 
 TEST_F(ValidationTest, PSVSemanticIndexTableReorder) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXILValidation\\hs_signatures.hlsl", "hs_6_0", &pProgram);
@@ -5106,7 +5117,7 @@ TEST_F(ValidationTest, PSVSemanticIndexTableReorder) {
   const uint32_t *PSVPtr = (const uint32_t *)GetDxilPartData(pPSVPart);
 
   uint32_t PSVRuntimeInfo_size = *(PSVPtr++);
-  VERIFY_ARE_EQUAL(sizeof(PSVRuntimeInfo4), PSVRuntimeInfo_size);
+  VERIFY_ARE_EQUAL(GetExpectedPSVRuntimeInfoSize(m_ver), PSVRuntimeInfo_size);
   PSVRuntimeInfo4 *PSVInfo =
       const_cast<PSVRuntimeInfo4 *>((const PSVRuntimeInfo4 *)PSVPtr);
   VERIFY_ARE_EQUAL(PSVInfo->SigInputElements, 3u);
@@ -5441,17 +5452,18 @@ struct SimplePSV {
   llvm::MutableArrayRef<uint32_t> PCInputToOutputTable;
   llvm::MutableArrayRef<uint32_t> ViewIDOutputMask[DXIL::kNumOutputStreams];
   llvm::MutableArrayRef<uint32_t> ViewIDPCOutputMask;
-  SimplePSV(const DxilPartHeader *pPSVPart);
+  SimplePSV(const DxilPartHeader *pPSVPart, uint32_t ExpectedRuntimeInfoSize);
 };
 
-SimplePSV::SimplePSV(const DxilPartHeader *pPSVPart) {
+SimplePSV::SimplePSV(const DxilPartHeader *pPSVPart,
+                     uint32_t ExpectedRuntimeInfoSize) {
   uint32_t PartSize = pPSVPart->PartSize;
   uint32_t *PSVPtr =
       const_cast<uint32_t *>((const uint32_t *)GetDxilPartData(pPSVPart));
   const uint32_t *PSVPtrEnd = PSVPtr + PartSize / 4;
 
   uint32_t PSVRuntimeInfoSize = *(PSVPtr++);
-  VERIFY_ARE_EQUAL(sizeof(PSVRuntimeInfo4), PSVRuntimeInfoSize);
+  VERIFY_ARE_EQUAL(ExpectedRuntimeInfoSize, PSVRuntimeInfoSize);
   PSVRuntimeInfo4 *PSVInfo4 =
       const_cast<PSVRuntimeInfo4 *>((const PSVRuntimeInfo4 *)PSVPtr);
   PSVInfo = PSVInfo4;
@@ -5550,8 +5562,9 @@ SimplePSV::SimplePSV(const DxilPartHeader *pPSVPart) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationVS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_VS.hlsl", "vs_6_8", &pProgram);
@@ -5578,7 +5591,7 @@ TEST_F(ValidationTest, PSVContentValidationVS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
 
   // Update PSV.
   PSV.SigInput[0].InterpolationMode = 20;
@@ -5705,8 +5718,9 @@ TEST_F(ValidationTest, PSVContentValidationVS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationHS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_HS.hlsl", "hs_6_8", &pProgram);
@@ -5733,7 +5747,7 @@ TEST_F(ValidationTest, PSVContentValidationHS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
 
   // Update PSV.
   PSV.SigPatchConstOrPrim[0].InterpolationMode = 20;
@@ -5854,8 +5868,9 @@ TEST_F(ValidationTest, PSVContentValidationHS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationDS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_DS.hlsl", "ds_6_8", &pProgram);
@@ -5882,7 +5897,7 @@ TEST_F(ValidationTest, PSVContentValidationDS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
 
   // Update PSV.
   PSV.SigPatchConstOrPrim[0].InterpolationMode = 20;
@@ -6010,8 +6025,9 @@ TEST_F(ValidationTest, PSVContentValidationDS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationGS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_GS.hlsl", "gs_6_8", &pProgram);
@@ -6038,7 +6054,7 @@ TEST_F(ValidationTest, PSVContentValidationGS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
   // Update PSV.
   PSV.PSVInfo->MaxVertexCount = 2;
 
@@ -6097,8 +6113,9 @@ TEST_F(ValidationTest, PSVContentValidationGS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationPS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_PS.hlsl", "ps_6_8", &pProgram);
@@ -6125,7 +6142,7 @@ TEST_F(ValidationTest, PSVContentValidationPS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
 
   // Update PSV.
   PSV.PSVInfo->PS.DepthOutput = 1;
@@ -6181,8 +6198,9 @@ TEST_F(ValidationTest, PSVContentValidationPS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationCS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_CS.hlsl", "cs_6_8", &pProgram);
@@ -6209,7 +6227,7 @@ TEST_F(ValidationTest, PSVContentValidationCS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
   // Update PSV.
   PSV.PSVInfo->NumThreadsX = 1;
 
@@ -6262,8 +6280,9 @@ TEST_F(ValidationTest, PSVContentValidationCS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationMS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_MS.hlsl", "ms_6_8", &pProgram);
@@ -6290,7 +6309,7 @@ TEST_F(ValidationTest, PSVContentValidationMS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
   // Update PSV.
   memset(PSV.ViewIDOutputMask[0].data(), 0,
          PSV.ViewIDOutputMask[0].size() * sizeof(uint32_t));
@@ -6328,8 +6347,9 @@ TEST_F(ValidationTest, PSVContentValidationMS) {
 }
 
 TEST_F(ValidationTest, PSVContentValidationAS) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_AS.hlsl", "as_6_8", &pProgram);
@@ -6356,7 +6376,7 @@ TEST_F(ValidationTest, PSVContentValidationAS) {
   VERIFY_ARE_NOT_EQUAL(hlsl::end(pHeader), pPartIter);
 
   const DxilPartHeader *pPSVPart = (const DxilPartHeader *)(*pPartIter);
-  SimplePSV PSV(pPSVPart);
+  SimplePSV PSV(pPSVPart, GetExpectedPSVRuntimeInfoSize(m_ver));
 
   // Update PSV.
   PSV.PSVInfo->AS.PayloadSizeInBytes = 0;
@@ -6429,8 +6449,9 @@ struct SimpleContainer {
 };
 
 TEST_F(ValidationTest, WrongPSVSize) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_AS.hlsl", "as_6_8", &pProgram);
@@ -6517,8 +6538,9 @@ TEST_F(ValidationTest, WrongPSVSize) {
 }
 
 TEST_F(ValidationTest, WrongPSVSizeOnZeros) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram;
   CompileFile(L"..\\DXC\\dumpPSV_PS.hlsl", "ps_6_8", &pProgram);
@@ -6548,7 +6570,7 @@ TEST_F(ValidationTest, WrongPSVSizeOnZeros) {
   const uint32_t *PSVPtr = (const uint32_t *)GetDxilPartData(pPSVPart);
 
   uint32_t PSVRuntimeInfo_size = *(PSVPtr++);
-  VERIFY_ARE_EQUAL(sizeof(PSVRuntimeInfo4), PSVRuntimeInfo_size);
+  VERIFY_ARE_EQUAL(GetExpectedPSVRuntimeInfoSize(m_ver), PSVRuntimeInfo_size);
   PSVRuntimeInfo4 *PSVInfo =
       const_cast<PSVRuntimeInfo4 *>((const PSVRuntimeInfo4 *)PSVPtr);
   VERIFY_ARE_EQUAL(2u, PSVInfo->SigInputElements);
@@ -6612,8 +6634,9 @@ TEST_F(ValidationTest, WrongPSVSizeOnZeros) {
 }
 
 TEST_F(ValidationTest, WrongPSVVersion) {
-  if (m_ver.SkipDxilVersion(1, 10))
-    return;
+  if (!m_ver.m_InternalValidator)
+    if (m_ver.SkipDxilVersion(1, 8))
+      return;
 
   CComPtr<IDxcBlob> pProgram60;
   std::vector<LPCWSTR> args;
@@ -6778,11 +6801,14 @@ TEST_F(ValidationTest, WrongPSVVersion) {
   VERIFY_IS_NOT_NULL(p60WithPSV68Result);
   VERIFY_SUCCEEDED(p60WithPSV68Result->GetStatus(&status));
   VERIFY_FAILED(status);
-  CheckOperationResultMsgs(
-      p60WithPSV68Result,
-      {"DXIL container mismatch for 'PSVRuntimeInfoSize' between 'PSV0' "
-       "part:('56') and DXIL module:('24')"},
-      /*maySucceedAnyway*/ false, /*bRegex*/ false);
+  std::string ExpectedPSVSizeStr =
+      std::to_string(GetExpectedPSVRuntimeInfoSize(m_ver));
+  std::string Msg60WithPSV68 =
+      "DXIL container mismatch for 'PSVRuntimeInfoSize' between 'PSV0' "
+      "part:('" +
+      ExpectedPSVSizeStr + "') and DXIL module:('24')";
+  CheckOperationResultMsgs(p60WithPSV68Result, {Msg60WithPSV68.c_str()},
+                           /*maySucceedAnyway*/ false, /*bRegex*/ false);
 
   // Create a new Blob.
   CComPtr<IDxcBlobEncoding> pProgram68WithPSV60;
@@ -6796,9 +6822,10 @@ TEST_F(ValidationTest, WrongPSVVersion) {
   VERIFY_IS_NOT_NULL(p68WithPSV60Result);
   VERIFY_SUCCEEDED(p68WithPSV60Result->GetStatus(&status));
   VERIFY_FAILED(status);
-  CheckOperationResultMsgs(
-      p68WithPSV60Result,
-      {"DXIL container mismatch for 'PSVRuntimeInfoSize' between 'PSV0' "
-       "part:('24') and DXIL module:('56')"},
-      /*maySucceedAnyway*/ false, /*bRegex*/ false);
+  std::string Msg68WithPSV60 =
+      "DXIL container mismatch for 'PSVRuntimeInfoSize' between 'PSV0' "
+      "part:('24') and DXIL module:('" +
+      ExpectedPSVSizeStr + "')";
+  CheckOperationResultMsgs(p68WithPSV60Result, {Msg68WithPSV60.c_str()},
+                           /*maySucceedAnyway*/ false, /*bRegex*/ false);
 }
