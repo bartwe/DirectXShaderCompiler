@@ -52,6 +52,7 @@ namespace MainNs
 
             int width = -1, height = -1;
             bool showWindow = args.Length == 0;
+            string fileName = null;
             for (int i = 0; i < args.Length;)
             {
                 if (args[i] == "-w")
@@ -72,7 +73,15 @@ namespace MainNs
                         ShowHelp();
                         return 1;
                     }
+                    continue;
                 }
+
+                if (args[i].StartsWith("-", StringComparison.Ordinal) || fileName != null)
+                {
+                    ShowHelp();
+                    return 1;
+                }
+                fileName = args[i++];
             }
 
             if (showWindow)
@@ -87,7 +96,12 @@ namespace MainNs
                 return 0;
             }
 
-            PrintOutTokenColors(args[0]);
+            if (fileName == null)
+            {
+                ShowHelp();
+                return 1;
+            }
+            PrintOutTokenColors(fileName);
 
             return 0;
         }
