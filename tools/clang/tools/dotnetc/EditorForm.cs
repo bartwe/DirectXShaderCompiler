@@ -1335,7 +1335,7 @@ namespace MainNs
         {
             // Whether there is a token boundary between text[i] and text[i-1].
             if (i == 0) return true;
-            if (i >= text.Length - 1) return true;
+            if (i >= text.Length) return true;
             char cPrior = text[i - 1];
             char c = text[i];
             return !IsDisassemblyTokenChar(cPrior) && IsDisassemblyTokenChar(c);
@@ -1344,7 +1344,7 @@ namespace MainNs
         private static bool IsTokenRightBoundary(string text, int i)
         {
             if (i == 0) return true;
-            if (i >= text.Length - 1) return true;
+            if (i >= text.Length) return true;
             char cPrior = text[i - 1];
             char c = text[i];
             return IsDisassemblyTokenChar(cPrior) && !IsDisassemblyTokenChar(c);
