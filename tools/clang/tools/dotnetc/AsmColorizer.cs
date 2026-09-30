@@ -11,9 +11,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-
-using DotNetDxc;
 
 namespace MainNs
 {
@@ -101,7 +98,8 @@ namespace MainNs
                 return AsmRangeKind.Label;
 
             int intWidth;
-            if (text[start] == 'i' && Int32.TryParse(text.Substring(start + 1, 1), out intWidth))
+            if (text[start] == 'i' && end - start > 1 &&
+                Int32.TryParse(text.Substring(start + 1, 1), out intWidth))
                 return AsmRangeKind.LLVMTypeName;
 
             string val = text.Substring(start, end - start);
