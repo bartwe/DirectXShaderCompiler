@@ -22,7 +22,7 @@ namespace MainNs
         #region Private fields.
 
         /// <summary>Host component.</summary>
-        private CHlslHost host;
+        private System.Runtime.InteropServices.ComTypes.IStream host;
 
         #endregion Private fields.
 
@@ -106,9 +106,9 @@ namespace MainNs
                         }
                         catch (System.Runtime.InteropServices.COMException)
                         {
-                            host = null;
+                            // The host may already have disconnected.
                         }
-
+                        host = null;
                     }
                     return;
                 }
@@ -125,7 +125,7 @@ namespace MainNs
         {
             try
             {
-                var str = host as System.Runtime.InteropServices.ComTypes.IStream;
+                var str = host;
                 byte[] response = new byte[8];
                 str.Read(response, (int)HhMessageHeader.FixedSize, IntPtr.Zero);
                 System.IO.BinaryReader r = new System.IO.BinaryReader(new System.IO.MemoryStream(response));
@@ -169,7 +169,7 @@ namespace MainNs
 
         internal void SendHostMessagePlay(string payload)
         {
-            var str = host as System.Runtime.InteropServices.ComTypes.IStream;
+            var str = host;
             HhMessageHeader h = new HhMessageHeader();
             h.Kind = SetPayloadMsgId;
             byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
@@ -186,7 +186,7 @@ namespace MainNs
 
         internal void SetParentHwnd(IntPtr handle)
         {
-            var str = host as System.Runtime.InteropServices.ComTypes.IStream;
+            var str = host;
             HhMessageHeader h = new HhMessageHeader();
             h.Kind = (uint)HhMessageId.SetParentHwndMsgId;
             h.Length = (uint)(HhMessageHeader.FixedSize + sizeof(UInt64));
@@ -266,7 +266,7 @@ namespace MainNs
             // Setup a communication channel.
             try
             {
-                host = new CHlslHost();
+                host = (System.Runtime.InteropServices.ComTypes.IStream)new CHlslHost();
             }
             catch (System.Runtime.InteropServices.COMException ctorErr)
             {
@@ -283,7 +283,7 @@ namespace MainNs
                     throw;
                 }
                 System.Threading.Thread.Sleep(200);
-                host = new CHlslHost();
+                host = (System.Runtime.InteropServices.ComTypes.IStream)new CHlslHost();
             }
         }
 
@@ -318,7 +318,7 @@ namespace MainNs
 
         private void SendHostMessage(uint kind)
         {
-            var str = host as System.Runtime.InteropServices.ComTypes.IStream;
+            var str = host;
             HhMessageHeader h = new HhMessageHeader();
             h.Length = HhMessageHeader.FixedSize;
             h.Kind = kind;
