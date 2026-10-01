@@ -4,8 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../AsmColorizer.cs" Link="AsmColorizer.cs" />
+    <Compile Include="AsmColorizerTests.cs" />
   </ItemGroup>
 </Project>
