@@ -1,12 +1,12 @@
 [submodule "external/SPIRV-Headers"]
 	path = external/SPIRV-Headers
-	url = https://github.com/KhronosGroup/SPIRV-Headers
+	url = git@lorn.stelumi.com:stelumi/SPIRV-Headers.git
 [submodule "external/SPIRV-Tools"]
 	path = external/SPIRV-Tools
-	url = https://github.com/KhronosGroup/SPIRV-Tools
+	url = git@lorn.stelumi.com:stelumi/SPIRV-Tools.git
 [submodule "external/googletest"]
 	path = external/googletest
 	url = https://github.com/google/googletest
 [submodule "external/DirectX-Headers"]
 	path = external/DirectX-Headers
-	url = https://github.com/microsoft/DirectX-Headers.git
+	url = git@lorn.stelumi.com:stelumi/DirectX-Headers.git
